@@ -87,4 +87,12 @@
     <string name="invalid_phone">ਠੀਕ ਮੋਬਾਈਲ ਨੰਬਰ ਦਰਜ ਕਰੋ।</string>
     <string name="verify_phone_first">ਪ੍ਰੋਫਾਈਲ ਬਣਾਉਣ ਤੋਂ ਪਹਿਲਾਂ ਓਟੀਪੀ ਨਾਲ ਮੋਬਾਈਲ ਨੰਬਰ ਤਸਦੀਕ ਕਰੋ।</string>
     <string name="login_success">AgriVision-Edge ਵਿੱਚ ਸਫਲਤਾਪੂਰਵਕ ਲੌਗ ਇਨ ਕੀਤਾ ਗਿਆ!</string>
+    <string name="logout">ਲੌਗ ਆਉਟ</string>
+    <string name="logout_dialog_title">ਲੌਗ ਆਉਟ ਕਰੋ?</string>
+    <string name="logout_dialog_message">ਕੀ ਤੁਸੀਂ ਸੱਚਮੁੱਚ ਲੌਗ ਆਉਟ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ? ਤੁਹਾਡੇ ਸੁਰੱਖਿਅਤ ਕੀਤੇ ਆਫ਼ਲਾਈਨ ਸਕੈਨ ਅਤੇ ਡਾਟਾ ਇਸ ਡਿਵਾਈਸ ਤੇ ਸੁਰੱਖਿਅਤ ਰਹਿਣਗੇ।</string>
+    <string name="scan_photo_required">ਕਿਰਪਾ ਕਰਕੇ ਪਹਿਲਾਂ ਪੱਤੇ ਦੀ ਫ਼ੋਟੋ ਅੱਪਲੋਡ ਕਰੋ ਜਾਂ ਖਿੱਚੋ।</string>
+    <string name="scan_invalid_image_title">ਅਵੈਧ ਤਸਵੀਰ</string>
+    <string name="scan_invalid_image_message">ਪੌਦੇ ਦਾ ਕੋਈ ਪੱਤਾ ਨਹੀਂ ਮਿਲਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਪੌਦੇ ਦੇ ਪੱਤੇ ਦੀ ਸਾਫ਼ ਫ਼ੋਟੋ ਅੱਪਲੋਡ ਕਰੋ ਜਾਂ ਖਿੱਚੋ।</string>
+    <string name="scan_processing_error">ਤਸਵੀਰ ਦੀ ਜਾਂਚ ਨਹੀਂ ਹੋ ਸਕੀ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</string>
+    <string name="scan_invalid_image_ok">ਠੀਕ ਹੈ</string>
 </resources>

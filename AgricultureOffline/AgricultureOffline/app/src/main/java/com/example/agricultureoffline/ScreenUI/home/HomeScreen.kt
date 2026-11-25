@@ -54,6 +54,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.agricultureoffline.R
 import com.example.agricultureoffline.data.local.Scan
+import com.example.agricultureoffline.data.local.SessionStore
 import com.example.agricultureoffline.domain.ScanInsights
 import com.example.agricultureoffline.domain.ScanStatusKey
 import com.example.agricultureoffline.i18n.DiseaseTranslator
@@ -76,13 +77,17 @@ fun HomeScreen(
     farmerId: Int,
     scans: List<Scan> = emptyList(),
     onScanClick: () -> Unit,
-    onProfileClick: () -> Unit,
+    onProfileClick: () -> Unit = {},
+    onLogoutClick: () -> Unit = {},
     onOpenScan: (Int) -> Unit = {},
     onDeleteScan: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var scanToDelete by remember { mutableStateOf<Scan?>(null) }
+    var showProfileDialog by remember { mutableStateOf(false) }
+    var showLogoutConfirmation by remember { mutableStateOf(false) }
     var tab by remember { mutableStateOf(HomeTab.Home) }
+    val context = LocalContext.current
     val language = LocalAppLanguage.current
     val setLanguage = LocalSetAppLanguage.current
     val locale = remember(language) { Locale(language) }
@@ -138,6 +143,177 @@ fun HomeScreen(
         )
     }
 
+    if (showProfileDialog) {
+        val phoneNumber = remember { SessionStore.getSession(context).phoneNumber }
+        AlertDialog(
+            onDismissRequest = { showProfileDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = null,
+                    tint = AgriColors.Mint,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = stringResource(R.string.profile),
+                    fontWeight = FontWeight.Bold,
+                    color = AgriColors.TextPrimary
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0x1FFFFFFF),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = stringResource(R.string.name),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AgriColors.TextMuted
+                            )
+                            Text(
+                                text = if (farmerName.isNotBlank()) farmerName else stringResource(R.string.farmer_fallback),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AgriColors.TextPrimary
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0x1FFFFFFF),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "Farmer ID",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AgriColors.TextMuted
+                                )
+                                Text(
+                                    text = "F${farmerId.toString().padStart(3, '0')}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AgriColors.Mint
+                                )
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0x1FFFFFFF),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = stringResource(R.string.nav_history),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AgriColors.TextMuted
+                                )
+                                Text(
+                                    text = "${scans.size} ${if (scans.size == 1) "scan" else "scans"}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AgriColors.TextPrimary
+                                )
+                            }
+                        }
+                    }
+
+                    if (phoneNumber.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0x1FFFFFFF),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = stringResource(R.string.phone_number),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AgriColors.TextMuted
+                                )
+                                Text(
+                                    text = phoneNumber,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = AgriColors.TextPrimary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Button(
+                        onClick = {
+                            showLogoutConfirmation = true
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = stringResource(R.string.logout),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                OutlinedButton(onClick = { showProfileDialog = false }) {
+                    Text(stringResource(R.string.back))
+                }
+            }
+        )
+    }
+
+    if (showLogoutConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirmation = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.logout_dialog_title),
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(text = stringResource(R.string.logout_dialog_message))
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showLogoutConfirmation = false
+                        showProfileDialog = false
+                        onLogoutClick()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text(stringResource(R.string.logout))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showLogoutConfirmation = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
     FieldBackground(modifier = modifier) {
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
@@ -170,7 +346,7 @@ fun HomeScreen(
                             )
                         }
                         IconButton(
-                            onClick = onProfileClick,
+                            onClick = { showProfileDialog = true },
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(RoundedCornerShape(16.dp))
@@ -424,7 +600,7 @@ fun HomeScreen(
                 onSelect = { selected ->
                     when (selected) {
                         HomeTab.Scan -> onScanClick()
-                        HomeTab.Profile -> onProfileClick()
+                        HomeTab.Profile -> showProfileDialog = true
                         else -> tab = selected
                     }
                 },

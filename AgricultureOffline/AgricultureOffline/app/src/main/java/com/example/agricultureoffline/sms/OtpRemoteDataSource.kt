@@ -19,14 +19,23 @@ class OtpRemoteDataSource {
         countryCode: String,
         nationalNumber: String,
         date: String,
-        time: String
+        time: String,
+        requestId: String? = null
     ): OtpApiResult {
-        return post("/notify/login-success", JSONObject().apply {
+        val payload = JSONObject().apply {
             put("countryCode", countryCode)
             put("phone", nationalNumber)
             put("date", date)
             put("time", time)
-        })
+            if (!requestId.isNullOrBlank()) {
+                put("requestId", requestId)
+            }
+        }
+        val res = post("/notify/welcome", payload)
+        if (res.code == "not_found") {
+            return post("/notify/login-success", payload)
+        }
+        return res
     }
 
     private fun post(path: String, body: JSONObject): OtpApiResult {
@@ -53,7 +62,7 @@ class OtpRemoteDataSource {
             val json = if (text.isBlank()) JSONObject() else JSONObject(text)
             OtpApiResult(
                 ok = json.optBoolean("ok", status in 200..299),
-                code = json.optString("code", if (status in 200..299) "ok" else "error"),
+                code = json.optString("code", if (status == 404) "not_found" else if (status in 200..299) "ok" else "error"),
                 message = json.optString("message", connection.responseMessage ?: "")
             )
         } catch (_: UnknownHostException) {

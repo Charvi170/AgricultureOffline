@@ -1,0 +1,28 @@
+AgriVision-Edge leaf photo validator
+
+MobileNetV2 0.5 from Keras with ImageNet weights and a separately trained
+binary classification head. Input: float32 RGB [1,160,160,3], pixels [0,255].
+The graph scales input to [-1,1]. Output: float32 [1,1] leaf score. A score of
+at least 0.525 passes the validator. Threshold selection minimizes the worst
+observed group error on calibration data, then mean group error.
+
+Training and calibration sources
+- MobileNetV2 implementation and weights from Keras.
+  https://keras.io/api/applications/mobilenet/
+- PlantVillage, Sharada P. Mohanty, David P. Hughes, and Marcel Salathé.
+  https://github.com/spMohanty/PlantVillage-Dataset
+  https://huggingface.co/datasets/mohanty/PlantVillage (CC BY-SA 3.0)
+- PlantDoc, Davinder Singh et al. CC BY 4.0.
+  https://github.com/pratikkayal/PlantDoc-Dataset
+- Mango Leaf Disease Identification Dataset, Mohidul Islam, Ahmed Kowser,
+  Abu Shahed Shah Md Nazmul Arefin, and Md Mizanur Rahman. CC BY 4.0.
+  https://doi.org/10.17632/jpwtpv2c4s.1
+- Open Images, Google and contributors. Annotations CC BY 4.0. Images are
+  listed individually by the dataset, which provides image attribution.
+  https://storage.googleapis.com/openimages/web/download_v6.html
+
+MangoLeafBD was used only for evaluation, under its CC BY-NC 3.0 terms.
+https://doi.org/10.17632/hxsnvwty3r.1
+
+Inputs were resized and labeled as leaf or non-leaf for this task. No
+dataset images are bundled. The model is separate from the disease model.

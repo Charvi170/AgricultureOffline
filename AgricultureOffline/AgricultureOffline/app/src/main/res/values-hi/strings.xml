@@ -87,4 +87,12 @@
     <string name="invalid_phone">मान्य मोबाइल नंबर दर्ज करें।</string>
     <string name="verify_phone_first">प्रोफ़ाइल बनाने से पहले ओटीपी से मोबाइल नंबर सत्यापित करें।</string>
     <string name="login_success">AgriVision-Edge में सफलतापूर्वक लॉग इन किया गया!</string>
+    <string name="logout">लॉग आउट</string>
+    <string name="logout_dialog_title">लॉग आउट करें?</string>
+    <string name="logout_dialog_message">क्या आप वाकई लॉग आउट करना चाहते हैं? आपके सहेजे गए ऑफ़लाइन स्कैन और डेटा इस डिवाइस पर सुरक्षित रहेंगे।</string>
+    <string name="scan_photo_required">कृपया पहले पत्ते की फ़ोटो अपलोड करें या लें।</string>
+    <string name="scan_invalid_image_title">अमान्य छवि</string>
+    <string name="scan_invalid_image_message">पौधे का कोई पत्ता नहीं मिला। कृपया किसी पौधे के पत्ते की साफ़ फ़ोटो अपलोड करें या लें।</string>
+    <string name="scan_processing_error">छवि को संसाधित नहीं किया जा सका। कृपया फिर से कोशिश करें।</string>
+    <string name="scan_invalid_image_ok">ठीक है</string>
 </resources>

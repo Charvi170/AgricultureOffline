@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -33,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,12 +54,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.example.agricultureoffline.R
+import com.example.agricultureoffline.ai.LeafImageValidator
 import com.example.agricultureoffline.ui.components.AnalysisLoadingOverlay
 import com.example.agricultureoffline.ui.components.FieldBackground
 import com.example.agricultureoffline.ui.components.GlassCard
 import com.example.agricultureoffline.ui.theme.AgriColors
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -76,6 +81,7 @@ fun ScanScreen(
     var capturedImage by remember { mutableStateOf<Bitmap?>(null) }
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
     var isProcessingImage by remember { mutableStateOf(false) }
+    var showInvalidImage by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     val registryOwner = LocalActivityResultRegistryOwner.current
@@ -296,40 +302,63 @@ fun ScanScreen(
                 // Analyze Leaf button
                 Button(
                     onClick = {
+                        if (isAnalyzing || isProcessingImage) return@Button
                         val uri = selectedImageUri
                         val bmp = capturedImage
-                        if ((uri != null || bmp != null) && !isAnalyzing && !isProcessingImage) {
-                            isProcessingImage = true
-                            coroutineScope.launch(Dispatchers.IO) {
-                                try {
+                        if (uri == null && bmp == null) {
+                            Toast.makeText(context, R.string.scan_photo_required, Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        isProcessingImage = true
+                        coroutineScope.launch {
+                            var pendingFile: File? = null
+                            var keepImage = false
+                            try {
+                                val isLeaf = withContext(Dispatchers.IO) {
                                     val scansDir = File(context.filesDir, "scans").apply { mkdirs() }
-                                    val destFile = File(scansDir, "scan_${System.currentTimeMillis()}.jpg")
+                                    val destFile = File.createTempFile("scan_", ".jpg", scansDir)
+                                    pendingFile = destFile
                                     if (uri != null) {
-                                        context.contentResolver.openInputStream(uri)?.use { input ->
+                                        val input = context.contentResolver.openInputStream(uri)
+                                            ?: error("Selected image could not be opened")
+                                        input.use {
                                             destFile.outputStream().use { output ->
-                                                input.copyTo(output)
+                                                it.copyTo(output)
                                             }
                                         }
                                     } else if (bmp != null) {
                                         destFile.outputStream().use { output ->
-                                            bmp.compress(Bitmap.CompressFormat.JPEG, 92, output)
+                                            check(bmp.compress(Bitmap.CompressFormat.JPEG, 92, output))
                                         }
                                     }
-                                    withContext(Dispatchers.Main) {
-                                        isProcessingImage = false
-                                        onAnalyzeClick(destFile.absolutePath)
+                                    LeafImageValidator.isLeaf(context, destFile)
+                                }
+                                if (uri == selectedImageUri && bmp === capturedImage) {
+                                    if (isLeaf) {
+                                        onAnalyzeClick(checkNotNull(pendingFile).absolutePath)
+                                        keepImage = true
+                                    } else {
+                                        showInvalidImage = true
                                     }
-                                } catch (e: Exception) {
-                                    Log.e(tag, "Failed to prepare image for analysis", e)
-                                    withContext(Dispatchers.Main) {
-                                        isProcessingImage = false
-                                        Toast.makeText(context, "Failed to prepare image", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.e(tag, "Failed to prepare or validate image", e)
+                                Toast.makeText(context, R.string.scan_processing_error, Toast.LENGTH_LONG).show()
+                            } finally {
+                                try {
+                                    if (!keepImage) withContext(NonCancellable + Dispatchers.IO) {
+                                        pendingFile?.delete()
                                     }
+                                } finally {
+                                    isProcessingImage = false
                                 }
                             }
                         }
                     },
-                    enabled = (selectedImageUri != null || capturedImage != null) && !isAnalyzing && !isProcessingImage,
+                    enabled = !isAnalyzing && !isProcessingImage,
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(28.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -340,6 +369,19 @@ fun ScanScreen(
                 ) {
                     Text(text = stringResource(R.string.analyze_leaf), fontWeight = FontWeight.Bold)
                 }
+            }
+
+            if (showInvalidImage) {
+                AlertDialog(
+                    onDismissRequest = { showInvalidImage = false },
+                    title = { Text(stringResource(R.string.scan_invalid_image_title)) },
+                    text = { Text(stringResource(R.string.scan_invalid_image_message)) },
+                    confirmButton = {
+                        TextButton(onClick = { showInvalidImage = false }) {
+                            Text(stringResource(R.string.scan_invalid_image_ok))
+                        }
+                    }
+                )
             }
 
             if (isAnalyzing) {

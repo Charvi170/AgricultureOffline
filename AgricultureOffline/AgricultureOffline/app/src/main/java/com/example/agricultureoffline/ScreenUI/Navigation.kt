@@ -24,10 +24,12 @@ import com.example.agricultureoffline.ScreenUI.farmer.FarmerScreen
 import com.example.agricultureoffline.ai.PlantDiseaseClassifier
 import com.example.agricultureoffline.data.local.AppDatabase
 import com.example.agricultureoffline.data.local.DiseaseSeeder
+import com.example.agricultureoffline.data.local.SessionStore
 import com.example.agricultureoffline.data.repository.AnalysisRepository
 import com.example.agricultureoffline.data.repository.DiseaseRepository
 import com.example.agricultureoffline.data.repository.FarmerRepository
 import com.example.agricultureoffline.data.repository.ScanRepository
+import com.example.agricultureoffline.sms.SmsQueueManager
 import com.example.agricultureoffline.ui.home.HomeScreen
 import com.example.agricultureoffline.ui.result.ResultScreen
 import com.example.agricultureoffline.ui.scan.ScanScreen
@@ -74,12 +76,16 @@ fun Navigation() {
 
     val navController = rememberNavController()
 
-    var currentFarmerId by rememberSaveable { mutableIntStateOf(0) }
-    var currentFarmerName by rememberSaveable { mutableStateOf("") }
+    val session = remember { SessionStore.getSession(context) }
+    var currentFarmerId by rememberSaveable { mutableIntStateOf(session.farmerId) }
+    var currentFarmerName by rememberSaveable { mutableStateOf(session.farmerName) }
+    val startDestination = remember {
+        if (session.isLoggedIn && session.farmerId > 0) "home" else "farmer"
+    }
 
     NavHost(
         navController = navController,
-        startDestination = "farmer",
+        startDestination = startDestination,
         enterTransition = { fadeIn() + slideInHorizontally { it / 8 } },
         exitTransition = { fadeOut() + slideOutHorizontally { -it / 8 } },
         popEnterTransition = { fadeIn() },
@@ -91,8 +97,10 @@ fun Navigation() {
                 onCreateProfile = { name, dialCode, phone ->
                     val fullPhone = if (phone.startsWith("+")) phone else "$dialCode$phone"
                     farmerViewModel.saveFarmer(name, fullPhone) { id ->
-                        currentFarmerId = id.toInt()
+                        val fId = id.toInt()
+                        currentFarmerId = fId
                         currentFarmerName = name
+                        SessionStore.saveSession(context, fId, name, fullPhone)
                         scanHistoryViewModel.loadScans(currentFarmerId)
 
                         Toast.makeText(
@@ -101,10 +109,14 @@ fun Navigation() {
                             Toast.LENGTH_SHORT
                         ).show()
 
-                        // Trigger SMS notification asynchronously on the backend (SMS failure must not block login)
-                        otpViewModel.sendLoginSuccessSms(dialCode, phone)
+                        // Queue welcome SMS offline-first (persists, syncs when network available, prevents duplicates)
+                        SmsQueueManager.enqueueWelcomeSms(context, dialCode, phone)
 
-                        navController.navigate("home")
+                        navController.navigate("home") {
+                            popUpTo("farmer") {
+                                inclusive = true
+                            }
+                        }
                     }
                 }
             )
@@ -112,7 +124,9 @@ fun Navigation() {
 
         composable("home") {
             LaunchedEffect(currentFarmerId) {
-                scanHistoryViewModel.loadScans(currentFarmerId)
+                if (currentFarmerId > 0) {
+                    scanHistoryViewModel.loadScans(currentFarmerId)
+                }
             }
 
             HomeScreen(
@@ -122,8 +136,16 @@ fun Navigation() {
                 onScanClick = {
                     navController.navigate("scan")
                 },
-                onProfileClick = {
-                    navController.navigate("farmer")
+                onProfileClick = {},
+                onLogoutClick = {
+                    SessionStore.clearSession(context)
+                    currentFarmerId = 0
+                    currentFarmerName = ""
+                    navController.navigate("farmer") {
+                        popUpTo(0) {
+                            inclusive = true
+                        }
+                    }
                 },
                 onOpenScan = { scanId ->
                     analysisViewModel.loadScan(scanId) { success ->

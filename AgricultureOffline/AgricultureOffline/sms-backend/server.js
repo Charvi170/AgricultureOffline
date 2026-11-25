@@ -16,6 +16,8 @@ const LOGIN_NOTIFY_SECRET = process.env.LOGIN_NOTIFY_SECRET || '';
 
 // Map to track rate limiting and duplicate prevention: phone -> { lastSentAt, sends: [], lastEventKey }
 const loginHistory = new Map();
+// Map to track processed request IDs to prevent duplicate processing across network retries: requestId -> timestamp
+const processedRequests = new Map();
 
 function loadEnv(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -67,10 +69,16 @@ function normalizePhone(countryCode, phone) {
 }
 
 function providerConfigured() {
+  if (PROVIDER === 'fast2sms') {
+    return Boolean(process.env.FAST2SMS_API_KEY);
+  }
   if (PROVIDER === '2factor') {
     return Boolean(process.env.TWOFACTOR_API_KEY);
   }
-  return Boolean(process.env.MSG91_AUTHKEY && (process.env.MSG91_LOGIN_TEMPLATE_ID || process.env.MSG91_TEMPLATE_ID));
+  if (PROVIDER === 'msg91') {
+    return Boolean(process.env.MSG91_AUTHKEY && (process.env.MSG91_LOGIN_TEMPLATE_ID || process.env.MSG91_TEMPLATE_ID));
+  }
+  return false;
 }
 
 function httpsRequest(urlString, options, body) {
@@ -128,9 +136,40 @@ function checkRateLimitAndDuplicate(phone, eventKey) {
   return { allowed: true };
 }
 
+async function sendLoginSuccessFast2Sms(phone, dateStr, timeStr) {
+  const apiKey = process.env.FAST2SMS_API_KEY;
+  const nationalNumber = phone.startsWith('91') && phone.length === 12 ? phone.slice(2) : phone;
+  const message = `AgriVision-Edge: Welcome to AgriVision! Successful login on ${dateStr} at ${timeStr}.`;
+
+  const payload = JSON.stringify({
+    route: 'q',
+    message: message,
+    language: 'english',
+    flash: 0,
+    numbers: nationalNumber
+  });
+
+  const result = await httpsRequest('https://www.fast2sms.com/dev/bulkV2', {
+    method: 'POST',
+    headers: {
+      authorization: apiKey,
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload)
+    }
+  }, payload);
+
+  const accepted = result.status >= 200 && result.status < 300 &&
+    (result.body.return === true || String(result.body.status_code || '') === '200');
+
+  return {
+    accepted,
+    providerRef: (result.body.request_id || (result.body.message && result.body.message[0])) || null,
+    status: result.status
+  };
+}
+
 async function sendLoginSuccessMsg91(phone, dateStr, timeStr) {
   const templateId = process.env.MSG91_LOGIN_TEMPLATE_ID || process.env.MSG91_TEMPLATE_ID;
-  const smsText = `AgriVision-Edge: You have successfully logged in on ${dateStr} at ${timeStr}.`;
 
   // Standard MSG91 Flow API for DLT approved templates
   const flowPayload = JSON.stringify({
@@ -192,6 +231,16 @@ async function handleLoginSuccess(req, res) {
     return json(res, 400, { ok: false, code: 'invalid_phone', message: 'Enter a valid mobile number.' });
   }
 
+  // Idempotency / duplicate request check by requestId
+  if (body.requestId && processedRequests.has(body.requestId)) {
+    return json(res, 200, {
+      ok: true,
+      code: 'duplicate_prevented',
+      message: 'Request already processed.',
+      requestId: body.requestId
+    });
+  }
+
   const now = new Date();
   const dateStr = String(body.date || now.toLocaleDateString('en-GB')).trim();
   const timeStr = String(body.time || now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })).trim();
@@ -201,7 +250,7 @@ async function handleLoginSuccess(req, res) {
     return json(res, 503, {
       ok: false,
       code: 'provider_unconfigured',
-      message: 'SMS provider credentials are not configured on the backend.'
+      message: `SMS provider '${PROVIDER}' is not configured. Please set credentials in .env file.`
     });
   }
 
@@ -225,9 +274,13 @@ async function handleLoginSuccess(req, res) {
 
   let sendResult;
   try {
-    sendResult = PROVIDER === '2factor'
-      ? await sendLoginSuccess2Factor(phone, dateStr, timeStr)
-      : await sendLoginSuccessMsg91(phone, dateStr, timeStr);
+    if (PROVIDER === 'fast2sms') {
+      sendResult = await sendLoginSuccessFast2Sms(phone, dateStr, timeStr);
+    } else if (PROVIDER === '2factor') {
+      sendResult = await sendLoginSuccess2Factor(phone, dateStr, timeStr);
+    } else {
+      sendResult = await sendLoginSuccessMsg91(phone, dateStr, timeStr);
+    }
   } catch (error) {
     return json(res, 502, {
       ok: false,
@@ -252,11 +305,22 @@ async function handleLoginSuccess(req, res) {
     sends: [...(prev.sends || []), Date.now()]
   });
 
+  if (body.requestId) {
+    processedRequests.set(body.requestId, Date.now());
+    // Prune processedRequests older than 24h
+    if (processedRequests.size > 1000) {
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      for (const [id, ts] of processedRequests.entries()) {
+        if (ts < oneDayAgo) processedRequests.delete(id);
+      }
+    }
+  }
+
   console.log(`Login-success SMS dispatched to ...${phone.slice(-4)} at ${dateStr} ${timeStr}`);
   return json(res, 200, {
     ok: true,
     code: 'sent',
-    message: 'Login-success notification sent to your mobile number.'
+    message: 'Welcome SMS notification dispatched to your mobile number.'
   });
 }
 
@@ -271,7 +335,12 @@ const server = http.createServer(async (req, res) => {
         requiresCredentials: !providerConfigured()
       });
     }
-    if (req.method === 'POST' && (req.url === '/notify/login-success' || req.url === '/sms/login-success')) {
+    if (req.method === 'POST' && (
+      req.url === '/notify/welcome' ||
+      req.url === '/sms/welcome' ||
+      req.url === '/notify/login-success' ||
+      req.url === '/sms/login-success'
+    )) {
       return await handleLoginSuccess(req, res);
     }
     return json(res, 404, { ok: false, code: 'not_found', message: 'Unknown endpoint.' });
